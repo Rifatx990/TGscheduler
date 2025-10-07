@@ -1,37 +1,52 @@
 from flask import Flask
-from routes import bp_routes  # bp_routes is now a list
+from routes import bp_routes  # bp_routes is a list
 from config import API_ID, API_HASH, SESSION_NAME
 from telethon import TelegramClient
 from scheduler import scheduler_loop
 from state import STATE
 from logger import log_info
-import threading, asyncio
+import threading
+import asyncio
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = './uploads'
 
-# Register all blueprints in bp_routes list
+# Register all blueprints
 for bp in bp_routes:
     app.register_blueprint(bp)
 
-# Initialize Telegram client
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+# Global Telegram client
+client = None
 
 def start_client():
-    async def run():
-        await client.start()
-        log_info("Telegram Client Started")
-    asyncio.run(run())
+    global client
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # Initialize Telegram client
+    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+    
+    # Start the client
+    loop.run_until_complete(client.start())
+    log_info("Telegram Client Started")
 
 # Start Telegram client in background thread
 threading.Thread(target=start_client, daemon=True).start()
 
-# Scheduler function to send messages
+# Scheduler function
 def send_func(item):
+    global client
+    if client is None:
+        log_info("Telegram client not ready yet")
+        return
+    # Import send_message dynamically to avoid circular import
     from routes.send_now import send_message
-    send_message(client, item)
+    import asyncio
+    # Run send_message in a temporary event loop
+    asyncio.run(send_message(client, item))
 
-# Start scheduler loop in background thread
+# Start scheduler in background thread
 threading.Thread(target=scheduler_loop, args=(send_func,), daemon=True).start()
 
 if __name__ == "__main__":
