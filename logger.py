@@ -1,13 +1,16 @@
-import threading
+import logging
 
-LOG_HISTORY = []
-lock = threading.Lock()
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("tg_messenger.log"),
+        logging.StreamHandler()
+    ]
+)
 
-def add_log(message):
-    with lock:
-        LOG_HISTORY.append(message)
-        print(message)
+def log_info(msg):
+    logging.info(msg)
 
-def get_logs():
-    with lock:
-        return LOG_HISTORY[-100:]  # last 100 logs
+def log_error(msg):
+    logging.error(msg)
