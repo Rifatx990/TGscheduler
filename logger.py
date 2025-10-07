@@ -1,10 +1,9 @@
-from datetime import datetime
+import threading
+logs = []
 
-LOG_HISTORY = []
+def add_log(message):
+    logs.append(message)
+    print(message)
 
-def add_log(msg: str):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    LOG_HISTORY.append(f"[{now}] {msg}")
-    if len(LOG_HISTORY) > 300:
-        LOG_HISTORY.pop(0)
-    print(msg)
+def get_logs():
+    return logs[-100:]  # last 100 logs
