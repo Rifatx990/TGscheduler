@@ -5,6 +5,7 @@ from logger import add_log
 from config import PORT
 
 # ---------------- IMPORT BLUEPRINTS ----------------
+# Importing blueprints here to avoid circular imports
 from routes.dashboard import bp_dashboard
 from routes.schedule_api import bp_schedule
 from routes.logs import bp_logs
@@ -41,6 +42,8 @@ def start_scheduler(async_func):
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(async_func())
+        except Exception as e:
+            add_log(f"❌ Scheduler error: {e}")
         finally:
             loop.close()
             add_log("🛑 Scheduler event loop closed.")
@@ -63,5 +66,5 @@ def stop_scheduler():
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
     add_log("🌐 Dashboard ready. Telegram login required.")
-    # threaded=True allows Flask to handle requests while async scheduler runs
+    # Use threaded=True to allow Flask to handle multiple requests while async scheduler runs
     app.run(host="0.0.0.0", port=PORT, threaded=True)
