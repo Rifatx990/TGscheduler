@@ -1,11 +1,11 @@
 from flask import Blueprint, render_template_string
 import os
 from logger import add_log
+from state import login_state, SCHEDULE_FILE, UPLOAD_FOLDER
 
 bp_dashboard = Blueprint("dashboard", __name__)
 
-SCHEDULE_FILE = "schedule.json"
-UPLOAD_FOLDER = "uploads"
+# Ensure uploads folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 HTML_DASHBOARD = """
@@ -73,8 +73,6 @@ async function reloadScheduler(){await fetch('/reload',{method:'POST'});reloadLo
 
 @bp_dashboard.route("/")
 def dashboard():
-    # Import login_state from login_route
-    from routes.login_route import login_state
     login_required = login_state["stage"] != "none"
 
     # Load schedule.json for display
