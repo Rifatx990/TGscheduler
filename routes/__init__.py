@@ -1,10 +1,22 @@
 # routes/__init__.py
+import os
+import importlib
+from flask import Blueprint
 
-# This file marks the 'routes' folder as a Python package.
-# You can also import commonly used blueprints here if needed.
+# Dictionary to store all blueprints
+blueprints = {}
 
-# Example: from .dashboard import bp_dashboard
-# Example: from .schedule_api import bp_schedule
-# Example: from .logs import bp_logs
-# Example: from .login_route import bp_login
-# Example: from .send_now import bp_send_now
+# Get the current directory (routes/)
+current_dir = os.path.dirname(__file__)
+
+# Loop through all Python files in this folder
+for filename in os.listdir(current_dir):
+    if filename.endswith(".py") and filename != "__init__.py":
+        module_name = filename[:-3]  # remove .py
+        module_path = f"{__name__}.{module_name}"
+        module = importlib.import_module(module_path)
+        # Check if the module has a variable 'bp_' (blueprint)
+        for attr in dir(module):
+            obj = getattr(module, attr)
+            if isinstance(obj, Blueprint):
+                blueprints[attr] = obj
