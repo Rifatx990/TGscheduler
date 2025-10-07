@@ -1,29 +1,27 @@
 from flask import Blueprint, request, jsonify
-from client import login_step, login_state
-import asyncio
-from logger import add_log
+from telethon.errors import SessionPasswordNeededError
+from telethon.sync import TelegramClient
+from config import API_ID, API_HASH, SESSION_NAME
+from state import STATE
+from logger import log_info
 
-bp_login = Blueprint("login", __name__)
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
+bp_login = Blueprint("login_route", __name__)
+
+client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 @bp_login.route("/login", methods=["POST"])
-def login_route():
-    phone = request.form.get("phone")
-    code = request.form.get("code")
-    password = request.form.get("password")
-
-    async def login_async():
-        return await login_step(phone=phone, code=code, password=password)
-
+def login():
+    data = request.json
+    phone = data.get("phone")
+    code = data.get("code")
     try:
-        future = asyncio.run_coroutine_threadsafe(login_async(), loop)
-        result = future.result(timeout=30)
-        add_log(f"ℹ️ Login attempt result: {result}")
-        return jsonify({"status": "ok", "message": result, "stage": login_state["stage"]})
-    except asyncio.TimeoutError:
-        add_log("❌ Login timeout. Try again.")
-        return jsonify({"status": "error", "message": "Login timeout. Try again."})
+        client.start(phone=phone, code_callback=lambda: code)
+        STATE["is_logged_in"] = True
+        log_info(f"Logged in as {phone}")
+        return jsonify({"status":"success"})
+    except SessionPasswordNeededError:
+        STATE["pending_2fa"] = True
+        return jsonify({"status":"2fa_required"})
     except Exception as e:
-        add_log(f"❌ Login route error: {e}")
-        return jsonify({"status": "error", "message": f"Login error: {e}"})
+        log_info(str(e))
+        return jsonify({"status":"error", "msg":str(e)})
