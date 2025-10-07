@@ -29,20 +29,16 @@ async def send_message(to, message, file_path=None):
 
 async def login_step(phone=None, code=None, password=None):
     global client, login_state
-    if client is None:
-        client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-        await client.connect()
+    c = await ensure_client()
     try:
-        # Step 1: Send code
         if login_state["stage"] == "none" and phone:
-            await client.send_code_request(phone)
+            await c.send_code_request(phone)
             login_state = {"stage": "code", "phone": phone, "code_sent": True}
             add_log(f"📩 Code sent to {phone}")
             return "Code sent, please enter it."
-        # Step 2: Enter code
         elif login_state["stage"] == "code" and code:
             try:
-                await client.sign_in(login_state["phone"], code)
+                await c.sign_in(login_state["phone"], code)
             except SessionPasswordNeededError:
                 login_state["stage"] = "password"
                 add_log("🔒 Two-factor password required.")
@@ -50,9 +46,8 @@ async def login_step(phone=None, code=None, password=None):
             login_state["stage"] = "none"
             add_log("✅ Logged in successfully!")
             return "Logged in successfully!"
-        # Step 3: Enter 2FA password
         elif login_state["stage"] == "password" and password:
-            await client.sign_in(login_state["phone"], password=password)
+            await c.sign_in(login_state["phone"], password=password)
             login_state["stage"] = "none"
             add_log("✅ Logged in with 2FA successfully!")
             return "Logged in successfully with 2FA!"
