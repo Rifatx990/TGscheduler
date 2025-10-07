@@ -1,17 +1,20 @@
 from flask import Flask
-from routes import bp_routes
+from routes import bp_routes  # bp_routes is now a list
 from config import API_ID, API_HASH, SESSION_NAME
 from telethon import TelegramClient
 from scheduler import scheduler_loop
 from state import STATE
 from logger import log_info
-import threading
-import asyncio
+import threading, asyncio
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = './uploads'
-app.register_blueprint(bp_routes)
 
+# Register all blueprints in bp_routes list
+for bp in bp_routes:
+    app.register_blueprint(bp)
+
+# Initialize Telegram client
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 def start_client():
@@ -20,14 +23,15 @@ def start_client():
         log_info("Telegram Client Started")
     asyncio.run(run())
 
-# Start Telegram client in background
-threading.Thread(target=start_client).start()
+# Start Telegram client in background thread
+threading.Thread(target=start_client, daemon=True).start()
 
-# Start scheduler in background
+# Scheduler function to send messages
 def send_func(item):
     from routes.send_now import send_message
     send_message(client, item)
 
+# Start scheduler loop in background thread
 threading.Thread(target=scheduler_loop, args=(send_func,), daemon=True).start()
 
 if __name__ == "__main__":
