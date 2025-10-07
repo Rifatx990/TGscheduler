@@ -1,11 +1,10 @@
-from flask import Blueprint, render_template_string
+from flask import Blueprint, render_template_string, request
 import os
-from logger import add_log
-from state import login_state, SCHEDULE_FILE, UPLOAD_FOLDER
+from state import SCHEDULE_FILE, UPLOAD_FOLDER
+from logger import get_logs
+from routes.login_route import login_state
 
 bp_dashboard = Blueprint("dashboard", __name__)
-
-# Ensure uploads folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 HTML_DASHBOARD = """
@@ -23,18 +22,18 @@ pre{background:#000;color:#0f0;padding:10px;height:200px;overflow-y:scroll;borde
 input[type="text"], input[type="password"]{width:100%;padding:8px;margin:5px 0;border-radius:6px;border:1px solid #ccc;}
 </style>
 <script>
-async function reloadLogs(){const res=await fetch('/logs');const data=await res.json();document.getElementById('logs').innerText=data.logs.join("\\n");}
+async function reloadLogs(){
+    const res=await fetch('/logs');
+    const data=await res.json();
+    document.getElementById('logs').innerText=data.logs.join("\\n");
+}
 setInterval(reloadLogs,3000);
-
-async function startScheduler(){await fetch('/start',{method:'POST'});reloadLogs();}
-async function stopScheduler(){await fetch('/stop',{method:'POST'});reloadLogs();}
-async function reloadScheduler(){await fetch('/reload',{method:'POST'});reloadLogs();}
 </script>
 </head>
 <body>
 <h2>📅 Telegram Scheduler Dashboard</h2>
 
-{% if login_required %}
+{% if login_state.stage != 'none' %}
 <form method="POST" action="/login">
   {% if login_state.stage == 'none' %}
     <label>Phone number (+8801xxxxxx):</label>
@@ -51,38 +50,22 @@ async function reloadScheduler(){await fetch('/reload',{method:'POST'});reloadLo
   {% endif %}
 </form>
 {% else %}
-<form method="POST" action="/update" enctype="multipart/form-data">
-<h3>📝 Edit schedule.json & Upload Files</h3>
-<textarea name="data">{{ data }}</textarea><br>
-<label>Upload files (per task):</label>
-<input type="file" name="files" multiple><br>
-<button type="submit">💾 Save Schedule</button>
-</form>
-
-<h3>⚙️ Controls</h3>
-<button onclick="startScheduler()">▶️ Start Scheduler</button>
-<button onclick="stopScheduler()">⏹ Stop Scheduler</button>
-<button onclick="reloadScheduler()">🔁 Reload Schedule</button>
+<p>✅ Logged in! Scheduler & send messages available.</p>
+{% endif %}
 
 <h3>📜 Live Logs</h3>
 <pre id="logs">Loading logs...</pre>
-{% endif %}
 </body>
 </html>
 """
 
-@bp_dashboard.route("/")
+@bp_dashboard.route("/", methods=["GET"])
 def dashboard():
-    login_required = login_state["stage"] != "none"
-
-    # Load schedule.json for display
     if os.path.exists(SCHEDULE_FILE):
         with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
             data = f.read()
     else:
         data = "[]"
-
     return render_template_string(HTML_DASHBOARD,
-                                  login_required=login_required,
                                   login_state=login_state,
                                   data=data)
