@@ -1,80 +1,96 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Telegram Scheduler Dashboard</title>
+<title>Telegram Dashboard</title>
 <style>
-body{font-family:sans-serif;padding:20px;color:#333;}
-h2{text-align:center;}
-textarea{width:100%;height:200px;font-family:monospace;border-radius:8px;padding:10px;border:1px solid #ccc;}
-button{padding:10px 15px;margin:5px;cursor:pointer;border-radius:6px;border:none;background:#007bff;color:white;}
-pre{background:#000;color:#0f0;padding:10px;height:200px;overflow-y:scroll;border-radius:8px;}
-input[type="text"], input[type="password"]{width:100%;padding:8px;margin:5px 0;border-radius:6px;border:1px solid #ccc;}
+body{font-family:Arial,sans-serif;margin:20px}h2{margin-top:30px}input,button{margin:5px;padding:5px}ul{list-style:none;padding:0}li{margin:5px 0}button{cursor:pointer}
+.progress-bar{width:0%;height:10px;background:green;margin-top:3px}
 </style>
-<script>
-async function reloadLogs(){
-    const res=await fetch('/logs');
-    const data=await res.json();
-    document.getElementById('logs').innerText = data.logs.join("\n");
-}
-setInterval(reloadLogs,3000);
-
-async function startScheduler(){ await fetch('/start',{method:'POST'}); reloadLogs(); }
-async function stopScheduler(){ await fetch('/stop',{method:'POST'}); reloadLogs(); }
-async function reloadScheduler(){ await fetch('/reload',{method:'POST'}); reloadLogs(); }
-
-async function submitLogin(form){
-    form.preventDefault();
-    const formData = new FormData(form);
-    const res = await fetch('/login', {method:'POST', body:formData});
-    const text = await res.text();
-    alert(text);
-    location.reload(); // reload dashboard to show updated stage
-}
-
-async function submitUpdate(form){
-    form.preventDefault();
-    const formData = new FormData(form);
-    const res = await fetch('/update', {method:'POST', body:formData});
-    const text = await res.text();
-    alert(text);
-}
-</script>
 </head>
 <body>
-<h2>📅 Telegram Scheduler Dashboard</h2>
 
-{% if login_required %}
-<form onsubmit="submitLogin(this)">
-<h3>🔑 Telegram Login</h3>
-{% if login_state.stage=="code" %}
-<label>Enter code sent to {{login_state.phone}}</label>
-<input type="text" name="code" required>
-{% elif login_state.stage=="password" %}
-<label>Two-factor password:</label>
-<input type="password" name="password" required>
-{% else %}
-<label>Phone number (with country code, e.g., +8801xxxxxx)</label>
-<input type="text" name="phone" required>
-{% endif %}
-<button type="submit">Login</button>
-</form>
-{% else %}
-<form onsubmit="submitUpdate(this)" enctype="multipart/form-data">
-<h3>📝 Edit schedule.json & Upload Files</h3>
-<textarea name="data">{{ data }}</textarea><br>
-<label>Upload files (per task):</label>
-<input type="file" name="files" multiple><br>
-<button type="submit">💾 Save Schedule</button>
-</form>
+<h2>Login</h2>
+<input type="text" id="phone" placeholder="Phone">
+<input type="text" id="code" placeholder="Code">
+<button onclick="login()">Login</button>
 
-<h3>⚙️ Controls</h3>
-<button onclick="startScheduler()">▶️ Start Scheduler</button>
-<button onclick="stopScheduler()">⏹ Stop Scheduler</button>
-<button onclick="reloadScheduler()">🔁 Reload Schedule</button>
+<h2>Send Message / Files Now</h2>
+<input type="text" id="user" placeholder="Username / Chat ID">
+<input type="text" id="message" placeholder="Message">
+<input type="file" id="file" multiple>
+<div class="progress-bar" id="send_progress"></div>
+<button onclick="sendNow()">Send</button>
 
-<h3>📜 Live Logs</h3>
-<pre id="logs">Loading logs...</pre>
-{% endif %}
+<h2>Scheduler</h2>
+<input type="text" id="sched_user" placeholder="Username / Chat ID">
+<input type="text" id="sched_message" placeholder="Message">
+<br>
+<input type="radio" name="sched_type" value="date" checked> Date
+<input type="radio" name="sched_type" value="cron"> Cron
+<br>
+<input type="datetime-local" id="sched_time">
+<input type="text" id="sched_cron" placeholder="Cron string, e.g., 0 10 * * *">
+<input type="file" id="sched_file" multiple>
+<div class="progress-bar" id="sched_progress"></div>
+<br>
+<button onclick="addSchedule()">Add Schedule</button>
+<button onclick="startScheduler()">Start Scheduler</button>
+<button onclick="stopScheduler()">Stop Scheduler</button>
+
+<h3>Current Schedule</h3>
+<ul id="schedule_list"></ul>
+
+<script>
+async function login(){
+  const phone=document.getElementById("phone").value;
+  const code=document.getElementById("code").value;
+  console.log(await (await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone,code})})).json());
+}
+
+async function sendNow(){
+  const user=document.getElementById("user").value;
+  const message=document.getElementById("message").value;
+  const files=document.getElementById("file").files;
+  let fd=new FormData(); fd.append("user",user); fd.append("message",message);
+  for(let f of files) fd.append("file",f);
+  const xhr=new XMLHttpRequest();
+  xhr.upload.onprogress=e=>document.getElementById("send_progress").style.width=(e.loaded/e.total*100)+"%";
+  xhr.open("POST","/send_now"); xhr.send(fd);
+}
+
+async function addSchedule(){
+  const type=document.querySelector('input[name="sched_type"]:checked').value;
+  const user=document.getElementById("sched_user").value;
+  const message=document.getElementById("sched_message").value;
+  const files=document.getElementById("sched_file").files;
+  let fd=new FormData(); fd.append("type",type); fd.append("user",user); fd.append("message",message);
+  for(let f of files) fd.append("file",f);
+  if(type=="date") fd.append("timestamp",new Date(document.getElementById("sched_time").value).getTime()/1000);
+  else if(type=="cron") fd.append("cron",document.getElementById("sched_cron").value);
+  const xhr=new XMLHttpRequest();
+  xhr.upload.onprogress=e=>document.getElementById("sched_progress").style.width=(e.loaded/e.total*100)+"%";
+  xhr.onload=()=>fetchSchedule();
+  xhr.open("POST","/scheduler"); xhr.send(fd);
+}
+
+async function startScheduler(){console.log(await (await fetch("/scheduler/start",{method:"POST"})).json());}
+async function stopScheduler(){console.log(await (await fetch("/scheduler/stop",{method:"POST"})).json());}
+
+async function fetchSchedule(){
+  const data=await (await fetch("/scheduler")).json();
+  const list=document.getElementById("schedule_list"); list.innerHTML="";
+  data.forEach((item,index)=>{
+    let li=document.createElement("li");
+    let nextRun="";
+    if(item.type=="date") nextRun=new Date(item.timestamp*1000).toLocaleString();
+    else if(item.type=="cron") nextRun=new Date(item.next_run*1000).toLocaleString();
+    li.textContent=`${index}: ${item.user} - ${item.message} - Type:${item.type} - Next Run: ${nextRun} - Files: ${(item.files||[]).join(", ")}`;
+    let delBtn=document.createElement("button"); delBtn.textContent="Delete"; delBtn.onclick=async()=>{await fetch("/scheduler/delete/"+index,{method:"DELETE"}); fetchSchedule();}
+    li.appendChild(delBtn); list.appendChild(li);
+  });
+}
+
+setInterval(fetchSchedule,5000); fetchSchedule();
+</script>
 </body>
-  </html>
+</html>
